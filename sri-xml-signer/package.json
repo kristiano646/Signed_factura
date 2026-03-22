@@ -29,7 +29,7 @@
   },
   "homepage": "https://github.com/JoseGusnay/osodreamer-sri-xml-signer#readme",
   "scripts": {
-    "build": "tsup",
+    "build": "NODE_OPTIONS='--max-old-space-size=512' tsup",
     "dev": "nodemon --watch src -e ts,json --exec \"tsup\"",
     "test": "jest",
     "test:coverage": "jest --coverage"
