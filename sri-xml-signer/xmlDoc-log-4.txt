@@ -1,0 +1,70 @@
+Tipo xmlDoc: Document
+Nodos hijos: 3
+Nombres nodos hijos: xml, #text, factura, 
+Primer nodo: xml
+xmlDoc.toString():
+<?xml version="1.0" encoding="UTF-8"?>
+<factura id="comprobante" version="1.1.0">
+  <infoTributaria>
+    <ambiente>2</ambiente>
+    <tipoEmision>1</tipoEmision>
+    <razonSocial>ARIAS GRANIZO CHRISTIAN ANTONIO</razonSocial>
+    <nombreComercial>ARIAS GRANIZO CHRISTIAN ANTONIO</nombreComercial>
+    <ruc>1804799755001</ruc>
+    <claveAcceso>2003202601180479975500120010010000000311588272517</claveAcceso>
+    <codDoc>01</codDoc>
+    <estab>001</estab>
+    <ptoEmi>001</ptoEmi>
+    <secuencial>000000031</secuencial>
+    <dirMatriz>Nicasio Safady</dirMatriz>
+  </infoTributaria>
+  <infoFactura>
+    <fechaEmision>20/03/2026</fechaEmision>
+    <dirEstablecimiento>Nicasio Safady</dirEstablecimiento>
+    <obligadoContabilidad>NO</obligadoContabilidad>
+    <tipoIdentificacionComprador>05</tipoIdentificacionComprador>
+    <razonSocialComprador>Consumidor Final</razonSocialComprador>
+    <identificacionComprador>9999999999999</identificacionComprador>
+    <totalSinImpuestos>1.00</totalSinImpuestos>
+    <totalDescuento>0.00</totalDescuento>
+    <totalConImpuestos>
+      <totalImpuesto>
+        <codigo>2</codigo>
+        <codigoPorcentaje>4</codigoPorcentaje>
+        <baseImponible>1.00</baseImponible>
+        <valor>0.15</valor>
+      </totalImpuesto>
+    </totalConImpuestos>
+    <propina>0</propina>
+    <importeTotal>1.15</importeTotal>
+    <moneda>DOLAR</moneda>
+    <pagos>
+      <pago>
+        <formaPago>01</formaPago>
+        <total>1.15</total>
+      </pago>
+    </pagos>
+  </infoFactura>
+  <detalles>
+    <detalle>
+      <codigoPrincipal>DC</codigoPrincipal>
+      <descripcion>CARPETA</descripcion>
+      <cantidad>1.00</cantidad>
+      <precioUnitario>1.00</precioUnitario>
+      <descuento>0.00</descuento>
+      <precioTotalSinImpuesto>1.00</precioTotalSinImpuesto>
+      <impuestos>
+        <impuesto>
+          <codigo>2</codigo>
+          <codigoPorcentaje>4</codigoPorcentaje>
+          <tarifa>15</tarifa>
+          <baseImponible>1.00</baseImponible>
+          <valor>0.15</valor>
+        </impuesto>
+      </impuestos>
+    </detalle>
+  </detalles>
+  <infoAdicional>
+    <campoAdicional nombre="Email">kristiano.l646@gmail.com</campoAdicional>
+  </infoAdicional>
+</factura>

@@ -1,0 +1,12 @@
+
+=== SIGNEDPROPERTIES DEBUG LOG 2026-03-22T03:37:33.107Z ===
+SignedProperties Original (primeros 200 chars): <etsi:SignedProperties xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:etsi="http://uri.etsi.org/01903/v1.3.2#" Id="Signature8816788-SignedProperties510338"><etsi:SignedSignatureProperties><etsi:S
+SignedProperties Original COMPLETO: <etsi:SignedProperties xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:etsi="http://uri.etsi.org/01903/v1.3.2#" Id="Signature8816788-SignedProperties510338"><etsi:SignedSignatureProperties><etsi:SigningTime>2026-03-21T22:37:33-05:00</etsi:SigningTime><etsi:SigningCertificate><etsi:Cert><etsi:CertDigest><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"></ds:DigestMethod><ds:DigestValue>4stgb97+rOZO8p55CVXtzMJuOWs=</ds:DigestValue></etsi:CertDigest><etsi:IssuerSerial><ds:X509IssuerName>L=AMBATO,CN=AUTORIDAD DE CERTIFICACION SUBCA-1 FIRMASEGURA S.A.S.,ST=TUNGURAHUA,OU=ENTIDAD DE CERTIFICACION DE INFORMACION,O=FIRMASEGURA S.A.S.,C=EC</ds:X509IssuerName><ds:X509SerialNumber>262361224604500346405023647177112389032</ds:X509SerialNumber></etsi:IssuerSerial></etsi:Cert></etsi:SigningCertificate></etsi:SignedSignatureProperties><etsi:SignedDataObjectProperties><etsi:DataObjectFormat ObjectReference="#Reference-ID-6721753"><etsi:Description>FIRMA DIGITAL SRI</etsi:Description><etsi:MimeType>text/xml</etsi:MimeType><etsi:Encoding>UTF-8</etsi:Encoding></etsi:DataObjectFormat></etsi:SignedDataObjectProperties></etsi:SignedProperties>
+
+Digest FORZADO: 4stgb97+rOZO8p55CVXtzMJuOWs=
+Digest encontrado en XML: 4stgb97+rOZO8p55CVXtzMJuOWs=
+¿Coinciden?: SÍ - FORZADO
+DIFERENCIA: DIGESTS IGUALES - PROBLEMA RESUELTO
+
+=== FIN DEBUG LOG ===
+

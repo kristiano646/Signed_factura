@@ -1,0 +1,6 @@
+export var TAX_CODE_ENUM;
+(function (TAX_CODE_ENUM) {
+    TAX_CODE_ENUM[TAX_CODE_ENUM["VAT"] = 2] = "VAT";
+    TAX_CODE_ENUM[TAX_CODE_ENUM["ICE"] = 3] = "ICE";
+    TAX_CODE_ENUM[TAX_CODE_ENUM["IRBPNR"] = 5] = "IRBPNR";
+})(TAX_CODE_ENUM || (TAX_CODE_ENUM = {}));

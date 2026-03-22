@@ -1,0 +1,3 @@
+export declare enum IMPUESTO_A_RETENER_ENUM {
+    IVA_PRESUNTIVO_Y_RENTA = 4
+}
