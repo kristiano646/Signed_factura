@@ -334,24 +334,24 @@ app.post('/firmar', async (req, res) => {
   let xmlValidacion = null;
   
   try {
-    let xmlRaw, id, rutaP12, password;
+    let xmlRaw, id, p12Base64, password;
     
     if (typeof req.body === 'string') {
       xmlRaw = req.body;
       id = req.query.id || 'default';
-      rutaP12 = req.query.rutaP12;
+      p12Base64 = req.query.p12Base64;
       password = req.query.password;
     } else {
       xmlRaw = req.body.xml;
       id = req.body.id;
-      rutaP12 = req.body.rutaP12;
+      p12Base64 = req.body.p12Base64;
       password = req.body.password;
     }
     
     console.log('========================================');
     console.log('📋 NUEVA SOLICITUD DE FIRMA');
     console.log('ID:', id);
-    console.log('Ruta P12:', rutaP12);
+    console.log('P12 Base64:', p12Base64 ? `${p12Base64.substring(0, 50)}...` : 'null');
     console.log('Timestamp:', new Date().toISOString());
     console.log('========================================');
     
@@ -365,12 +365,12 @@ app.post('/firmar', async (req, res) => {
       });
     }
     
-    if (!rutaP12) {
+    if (!p12Base64) {
       return res.status(400).json({ 
         success: false,
         error: 'VALIDACION_ERROR', 
-        mensaje: 'Campo rutaP12 vacío',
-        solucion: 'Proporcione la ruta al archivo P12'
+        mensaje: 'Campo p12Base64 vacío',
+        solucion: 'Proporcione el certificado P12 en formato Base64'
       });
     }
     
@@ -408,21 +408,21 @@ app.post('/firmar', async (req, res) => {
     console.log(`📄 Tipo comprobante: ${xmlValidacion.comprobante}`);
     console.log(`🔑 Clave acceso: ${xmlValidacion.claveAcceso}`);
 
-    // 2. VALIDACIÓN DE ARCHIVO P12
-    console.log('🔐 Validando certificado...');
+    // 2. CONVERTIR P12 BASE64 A BUFFER
+    console.log('🔐 Procesando certificado P12 desde Base64...');
+    let p12Buffer;
     try {
-      await fs.access(rutaP12);
+      p12Buffer = Buffer.from(p12Base64, 'base64');
+      console.log(`✅ P12 convertido desde Base64. Tamaño: ${p12Buffer.length} bytes`);
     } catch (error) {
       return res.status(400).json({
         success: false,
-        error: 'CERTIFICADO_NO_ENCONTRADO',
-        mensaje: 'No se puede acceder al archivo del certificado',
-        solucion: 'Verifique que la ruta del archivo P12 sea correcta',
+        error: 'CERTIFICADO_INVALIDO',
+        mensaje: 'No se pudo decodificar el certificado P12 desde Base64',
+        solucion: 'Verifique que el certificado esté correctamente codificado en Base64',
         detalle: error.message
       });
     }
-    
-    const p12Buffer = await fs.readFile(rutaP12);
     
     // 3. EXTRACCIÓN DE CERTIFICADO
     console.log('📋 Extrayendo datos del certificado...');
