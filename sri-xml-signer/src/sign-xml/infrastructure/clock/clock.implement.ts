@@ -10,7 +10,7 @@ export class ClockImplement implements ClockPort {
     const targetDate =
       localOffset === desiredOffset
         ? date
-        : new Date(date.getTime() + (desiredOffset - localOffset) * 60_000);
+        : new Date(date.getTime() + (localOffset - desiredOffset) * 60_000);
 
     const y = targetDate.getFullYear();
     const mo = String(targetDate.getMonth() + 1).padStart(2, "0");

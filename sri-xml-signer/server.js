@@ -839,8 +839,12 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', service: 'XML Signer with XAdES' });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
-  console.log(`📝 Endpoint: http://localhost:${PORT}/firmar`);
-});
+module.exports = app;
+
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+    console.log(`📝 Endpoint: http://localhost:${PORT}/firmar`);
+  });
+}

@@ -6,7 +6,7 @@ export class ClockImplement {
         // Si ya estamos en Ecuador, no modificar
         const targetDate = localOffset === desiredOffset
             ? date
-            : new Date(date.getTime() + (desiredOffset - localOffset) * 60000);
+            : new Date(date.getTime() + (localOffset - desiredOffset) * 60000);
         const y = targetDate.getFullYear();
         const mo = String(targetDate.getMonth() + 1).padStart(2, "0");
         const d = String(targetDate.getDate()).padStart(2, "0");

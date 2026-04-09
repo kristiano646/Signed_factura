@@ -840,7 +840,7 @@ var ClockImplement = class {
     const date = /* @__PURE__ */ new Date();
     const localOffset = date.getTimezoneOffset();
     const desiredOffset = 300;
-    const targetDate = localOffset === desiredOffset ? date : new Date(date.getTime() + (desiredOffset - localOffset) * 6e4);
+    const targetDate = localOffset === desiredOffset ? date : new Date(date.getTime() + (localOffset - desiredOffset) * 6e4);
     const y = targetDate.getFullYear();
     const mo = String(targetDate.getMonth() + 1).padStart(2, "0");
     const d = String(targetDate.getDate()).padStart(2, "0");
