@@ -1,3 +1,6 @@
+// ⏰ Forzar zona horaria UTC-5 (Ecuador) ANTES de cargar la librería
+require('./date-override');
+
 // server-production-final.js - VERSIÓN MEJORADA CON VALIDACIÓN XML Y MANEJO DE ERRORES SRI
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -468,18 +471,6 @@ app.post('/firmar', async (req, res) => {
       xmlBuffer: new Uint8Array(xmlBuffer)
     });
 
-    // Si el backend proporciona signingTime, reemplazarlo en el XML
-    let xmlFirmadoFinal = xmlFirmado;
-    if (signingTime) {
-      console.log(`⏰ Reemplazando SigningTime con: ${signingTime}`);
-      // Reemplazar el SigningTime generado automáticamente con el del backend
-      xmlFirmadoFinal = xmlFirmado.replace(
-        /<etsi:SigningTime>[^<]+<\/etsi:SigningTime>/,
-        `<etsi:SigningTime>${signingTime}</etsi:SigningTime>`
-      );
-      console.log('✅ SigningTime reemplazado correctamente');
-    }
-
     const endTime = Date.now();
     const processingTime = endTime - startTime;
     
@@ -493,7 +484,7 @@ app.post('/firmar', async (req, res) => {
     
     return res.json({
       success: true,
-      firmado: xmlFirmadoFinal,
+      firmado: xmlFirmado,
       message: 'XML firmado correctamente',
       metadata: {
         tipoComprobante: xmlValidacion.comprobante,
