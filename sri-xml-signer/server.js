@@ -334,18 +334,20 @@ app.post('/firmar', async (req, res) => {
   let xmlValidacion = null;
   
   try {
-    let xmlRaw, id, p12Base64, password;
+    let xmlRaw, id, p12Base64, password, signingTime;
     
     if (typeof req.body === 'string') {
       xmlRaw = req.body;
       id = req.query.id || 'default';
       p12Base64 = req.query.p12Base64;
       password = req.query.password;
+      signingTime = req.query.signingTime; // ← Obtener hora del backend
     } else {
       xmlRaw = req.body.xml;
       id = req.body.id;
       p12Base64 = req.body.p12Base64;
       password = req.body.password;
+      signingTime = req.body.signingTime; // ← Obtener hora del backend
     }
     
     console.log('========================================');
@@ -466,6 +468,18 @@ app.post('/firmar', async (req, res) => {
       xmlBuffer: new Uint8Array(xmlBuffer)
     });
 
+    // Si el backend proporciona signingTime, reemplazarlo en el XML
+    let xmlFirmadoFinal = xmlFirmado;
+    if (signingTime) {
+      console.log(`⏰ Reemplazando SigningTime con: ${signingTime}`);
+      // Reemplazar el SigningTime generado automáticamente con el del backend
+      xmlFirmadoFinal = xmlFirmado.replace(
+        /<etsi:SigningTime>[^<]+<\/etsi:SigningTime>/,
+        `<etsi:SigningTime>${signingTime}</etsi:SigningTime>`
+      );
+      console.log('✅ SigningTime reemplazado correctamente');
+    }
+
     const endTime = Date.now();
     const processingTime = endTime - startTime;
     
@@ -479,7 +493,7 @@ app.post('/firmar', async (req, res) => {
     
     return res.json({
       success: true,
-      firmado: xmlFirmado,
+      firmado: xmlFirmadoFinal,
       message: 'XML firmado correctamente',
       metadata: {
         tipoComprobante: xmlValidacion.comprobante,
