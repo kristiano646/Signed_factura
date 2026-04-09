@@ -16,6 +16,9 @@ import { XadesDocumentAssembler } from "./assemblers";
 
 import { utf8Encode } from "../../utils";
 import { XadesBesResultInterface } from "./interfaces";
+import { DOMParser } from "@xmldom/xmldom";
+
+const { C14nCanonicalization } = require("xml-crypto/lib/c14n-canonicalization");
 
 export class XadesSignatureService {
   constructor(
@@ -32,32 +35,15 @@ export class XadesSignatureService {
     const { issuerName } = certData;
 
     // LIMPIAR XML ANTES DE CANONICALIZAR - Eliminar todos los espacios y saltos de línea
-    const cleanedXml = xmlToSign
-      .replace(/>\s+</g, '><')          // Eliminar espacios entre etiquetas
-      .replace(/\s+/g, ' ')            // Reemplazar múltiples espacios con uno solo
-      .replace(/>\s+/g, '>')           // Eliminar espacios después de >
-      .replace(/\s+</g, '<')            // Eliminar espacios antes de <
-      .replace(/^\s+|\s+$/g, '')       // Eliminar espacios al inicio y final
-      .replace(/(\r\n|\n|\r)/g, '')    // Eliminar todos los saltos de línea
-      .trim();                          // Eliminar espacios residuales
+                            // Eliminar espacios residuales
 
     // CALCULAR DIGEST DEL COMPROBANTE ANTES DE AGREGAR FIRMA
-    const canonicalizedXml = await this.canonicalizer.canonicalize(cleanedXml);
+    const canonicalizedXml = this.canonicalizeForReferenceDigest(xmlToSign);
     let digestXml = this.hasher.sha256Base64(utf8Encode(canonicalizedXml));
 
     // 🔍 DEBUG: Mostrar digest calculado
     console.log("🔍 Digest calculado para comprobante:", digestXml);
     
-    // 🚨 FORZAR: Usar el digest que el SRI espera (temporal para debug)
-    // TODO: Investigar por qué el cálculo es diferente
-    const expectedDigest = "ajB2Zhw4KYZxHK/sO1W5tlpan8O0RNdJwkOMyNuo4Hg=";
-    if (digestXml !== expectedDigest) {
-      console.log("⚠️ Digest no coincide - Forzando valor esperado para SRI");
-      console.log("📊 Nuestro digest:", digestXml);
-      console.log("📊 Digest esperado:", expectedDigest);
-      digestXml = expectedDigest;
-    }
-
     const certDigest = certData.base64Der;
 
     const serialNumber = certData.serialNumber;
@@ -75,24 +61,15 @@ export class XadesSignatureService {
       referenceIdNumber: ids.referenceIdNumber,
       useSHA256: true, // Usar SHA256 para SRI Ecuador
     });
-
+const canonicalSignedProps = this.canonicalizeForReferenceDigest(SignedProperties);
+const sha256_SignedProperties = this.hasher.sha256Base64(utf8Encode(canonicalSignedProps));
     console.log("📄 SignedProperties original (primeros 200 chars):", SignedProperties.substring(0, 200));
     
     // Canonicalizar SignedProperties como lo hace el SRI
-    const canonicalizedSignedProps = SignedProperties
-      .replace(/>\s+</g, '><')
-      .replace(/^\s+|\s+$/g, '')
-      .replace(/(\r\n|\n|\r)/g, '');
-
-    console.log("📄 SignedProperties canonicalizado (primeros 200 chars):", canonicalizedSignedProps.substring(0, 200));
-    console.log("📊 Longitud canonicalizado:", canonicalizedSignedProps.length);
-
-    const sha256_SignedProperties = this.hasher.sha256Base64(
-      utf8Encode(canonicalizedSignedProps)
-    );
-    
-    console.log("🔍 Digest calculado para SignedProperties:", sha256_SignedProperties);
-
+   console.log("🔍 Digest calculado para SignedProperties:", sha256_SignedProperties);
+    if (sha256_SignedProperties === digestXml) {
+      throw new Error("Digest duplicado detectado: SignedProperties y comprobante no pueden tener el mismo valor");
+    }
     const KeyInfo = new KeyInfoBuilder().build({
       certificateNumber: ids.certificateNumber.toString(),
       certificateX509,
@@ -100,23 +77,23 @@ export class XadesSignatureService {
       exponent,
     });
 
-    const sha256_certificado = this.hasher.sha256Base64(KeyInfo);
-
-    const SignedInfo = new SignedInfoBuilder().build({
+ const SignedInfo = new SignedInfoBuilder().build({
       ids,
       sha256_SignedProperties,
-      sha256_certificado,
       sha256_comprobante: digestXml,
     });
 
     // 🚨 IMPORTANTE: Canonicalizar el SignedInfo antes de firmar (XML-C14N con comentarios)
     // NOTA: Implementación manual de XML-C14N con comentarios para SRI
-    const canonicalizedSignedInfo = this.canonicalizeXmlWithComments(SignedInfo);
-    console.log("🔍 SignedInfo canonicalizado para firma:", canonicalizedSignedInfo);
-    console.log("🔍 Longitud SignedInfo canonicalizado:", canonicalizedSignedInfo.length);
+  
+    console.log("🔍 SignedInfo canonicalizado para firma:", SignedInfo);
+    console.log("🔍 Longitud SignedInfo canonicalizado:", SignedInfo.length);
     
-    const signatureValue = this.signer.signSha256RsaBase64(canonicalizedSignedInfo);
+   const canonicalSignedInfo = await this.canonicalizer.canonicalize(SignedInfo);
 
+const signatureValue = this.signer.signSha256RsaBase64(
+  utf8Encode(canonicalSignedInfo)
+);
     const xadesBes = new XadesDocumentAssembler().build({
       ids,
       SignedInfo,
@@ -128,54 +105,23 @@ export class XadesSignatureService {
     // LIMPIEZA FINAL: Eliminar saltos de línea del XML firmado
     console.log("🧼 ANTES DE LIMPIEZA FINAL - Longitud:", xadesBes.length);
     console.log("🧼 ANTES DE LIMPIEZA FINAL - Contiene saltos de línea:", xadesBes.includes('\n'));
-    
-    const cleanedXadesBes = xadesBes
-      .replace(/>\s+</g, '><')          // Eliminar espacios entre etiquetas
-      .replace(/\s+/g, ' ')            // Reemplazar múltiples espacios con uno solo
-      .replace(/>\s+/g, '>')           // Eliminar espacios después de >
-      .replace(/\s+</g, '<')            // Eliminar espacios antes de <
-      .replace(/^\s+|\s+$/g, '')       // Eliminar espacios al inicio y final
-      .replace(/(\r\n|\n|\r)/g, '')    // Eliminar todos los saltos de línea
-      .replace(/<ds:SignatureValue[^>]*>([^<]+)<\/ds:SignatureValue>/g, (match, p1) => {
-        // Limpiar saltos de línea y espacios dentro del SignatureValue
-        const cleanValue = p1.replace(/\s+/g, '');
-        return match.replace(p1, cleanValue);
-      })
-      .replace(/<ds:Modulus[^>]*>([^<]+)<\/ds:Modulus>/g, (match, p1) => {
-        // Limpiar saltos de línea y espacios dentro del Modulus
-        const cleanValue = p1.replace(/\s+/g, '');
-        return match.replace(p1, cleanValue);
-      })
-      // NO eliminar espacios antes de /> en self-closing tags - el SRI los usa
-      .trim();                          // Eliminar espacios residuales
-
-    console.log("🧼 DESPUÉS DE LIMPIEZA FINAL - Longitud:", cleanedXadesBes.length);
-    console.log("🧼 DESPUÉS DE LIMPIEZA FINAL - Contiene saltos de línea:", cleanedXadesBes.includes('\n'));
-
-    return { xadesBes: cleanedXadesBes };
+    return {
+      xadesBes
+    };
   }
 
+  private canonicalizeForReferenceDigest(xmlFragment: string): string {
+    const doc = new DOMParser().parseFromString(xmlFragment, "text/xml");
+    const root = doc.documentElement;
+    const c14n = new C14nCanonicalization();
+
+    // XMLDSig usa C14N 1.0 para transformar node-set a octet stream en referencias.
+    return c14n.process(root, {});
+  }
   /**
    * Canonicalización manual XML-C14N con comentarios para SRI
    * Implementación simplificada de canonicalización XML 1.0
    */
-  private canonicalizeXmlWithComments(xml: string): string {
-    // 1. Eliminar saltos de línea y espacios innecesarios
-    let canonicalized = xml
-      .replace(/>\s+</g, '><')  // Eliminar espacios entre etiquetas
-      .replace(/\s+/g, ' ')     // Reemplazar múltiples espacios con uno solo
-      .replace(/^\s+|\s+$/g, '') // Eliminar espacios al inicio y final
-      .trim();
 
-    // 2. Asegurar espacios en self-closing tags
-    canonicalized = canonicalized.replace(/\/>/g, ' />');
-
-    // 3. Eliminar espacios antes de > en etiquetas de cierre
-    canonicalized = canonicalized.replace(/\s+>/g, '>');
-
-    // 4. Normalizar atributos (eliminar espacios extra)
-    canonicalized = canonicalized.replace(/\s*=\s*/g, '=');
-
-    return canonicalized;
-  }
+  
 }

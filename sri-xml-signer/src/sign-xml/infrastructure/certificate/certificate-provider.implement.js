@@ -31,7 +31,7 @@ export class CertificateProviderImplement {
         const certificate = mainCertificate.cert;
         const certificateX509_asn1 = forge.pki.certificateToAsn1(certificate);
         const certificateX509_der = forge.asn1.toDer(certificateX509_asn1);
-        const certificateX509_der_hash = forge.util.encode64(forge.sha1.create().update(certificateX509_der.bytes()).digest().bytes());
+        const certificateX509_der_hash = forge.util.encode64(forge.sha256.create().update(certificateX509_der.bytes()).digest().bytes());
         const X509SerialNumber = new forge.jsbn.BigInteger(Array.from(Buffer.from(certificate.serialNumber, "hex"))).toString();
         const certificateX509 = forge.util.encode64(certificateX509_der.bytes());
         const exponent = await this.crypto.hexToBase64(privateKey.e.data[0].toString(16));

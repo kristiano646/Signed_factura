@@ -26,6 +26,7 @@ export enum TRANSFORM_ALGORITHMS {
 export enum CANONICALIZATION_ALGORITHMS {
   XML_C14N_20010315 = "http://www.w3.org/TR/2001/REC-xml-c14n-20010315",
   XML_C14N_20010315_WITH_COMMENTS = "http://www.w3.org/TR/2001/REC-xml-c14n-20010315#WithComments",
+  XML_EXC_C14N_20010315 = "http://www.w3.org/2001/10/xml-exc-c14n#",
 }
 
 // enums/XadesURIs.ts

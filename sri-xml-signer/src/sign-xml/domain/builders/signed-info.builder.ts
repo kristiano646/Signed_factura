@@ -12,39 +12,24 @@ export class SignedInfoBuilder {
   build(params: {
     ids: SignatureIdentifiersInterface;
     sha256_SignedProperties?: string;
-    sha256_certificado?: string;
     sha256_comprobante?: string;
-    sha1_SignedProperties?: string;
-    sha1_certificado?: string;
-    sha1_comprobante?: string;
   }): string {
     const { 
       ids, 
       sha256_SignedProperties, 
-      sha256_certificado, 
-      sha256_comprobante,
-      sha1_SignedProperties, 
-      sha1_certificado, 
-      sha1_comprobante
+      sha256_comprobante
     } = params;
 
-    // Determinar si usar SHA256 o SHA1
-    const useSHA256 = sha256_SignedProperties && sha256_certificado && sha256_comprobante;
-    const signedPropsDigest = useSHA256 ? sha256_SignedProperties : sha1_SignedProperties;
-    const certDigest = useSHA256 ? sha256_certificado : sha1_certificado;
-    const comprobanteDigest = useSHA256 ? sha256_comprobante : sha1_comprobante;
-    const digestAlgorithm = useSHA256 ? DIGEST_ALGORITHMS.SHA256 : DIGEST_ALGORITHMS.SHA1;
-    const signatureAlgorithm = useSHA256 ? SIGNATURE_ALGORITHMS.RSA_SHA256 : SIGNATURE_ALGORITHMS.RSA_SHA1;
-
+    // ✅ SRI Ecuador SIEMPRE usa SHA256 - NO hay fallback a SHA1
     const signedInfo = [
       `<ds:SignedInfo ${XMLNS_ATTRIBUTE} Id="Signature-SignedInfo${ids.signedInfoNumber}">`,
-      `<ds:CanonicalizationMethod Algorithm="${CANONICALIZATION_ALGORITHMS.XML_C14N_20010315_WITH_COMMENTS}" />`,
-      `<ds:SignatureMethod Algorithm="${signatureAlgorithm}" />`,
+      `<ds:CanonicalizationMethod Algorithm="${CANONICALIZATION_ALGORITHMS.XML_EXC_C14N_20010315}" />`,
+      `<ds:SignatureMethod Algorithm="${SIGNATURE_ALGORITHMS.RSA_SHA256}" />`,
       // 🔄 Referencia a SignedProperties PRIMERO (orden que SRI espera)
       `<ds:Reference Id="SignedPropertiesID${ids.signedPropertiesIdNumber}" Type="${XADES_URIS.SIGNED_PROPERTIES}" URI="#Signature${ids.signatureNumber}-SignedProperties${ids.signedPropertiesNumber}">`,
-      `<ds:DigestMethod Algorithm="${digestAlgorithm}" />`,
+      `<ds:DigestMethod Algorithm="${DIGEST_ALGORITHMS.SHA256}" />`,
       "<ds:DigestValue>",
-      signedPropsDigest,
+      sha256_SignedProperties,
       "</ds:DigestValue>",
       "</ds:Reference>",
       // 🔄 Referencia al COMPROBANTE DESPUÉS
@@ -52,9 +37,9 @@ export class SignedInfoBuilder {
       "<ds:Transforms>",
       `<ds:Transform Algorithm="${TRANSFORM_ALGORITHMS.ENVELOPED_SIGNATURE}" />`,
       "</ds:Transforms>",
-      `<ds:DigestMethod Algorithm="${digestAlgorithm}" />`,
+      `<ds:DigestMethod Algorithm="${DIGEST_ALGORITHMS.SHA256}" />`,
       "<ds:DigestValue>",
-      comprobanteDigest,
+      sha256_comprobante,
       "</ds:DigestValue>",
       "</ds:Reference>",
       "</ds:SignedInfo>",

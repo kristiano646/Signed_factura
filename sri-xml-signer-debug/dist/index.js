@@ -502,18 +502,20 @@ var CertificateProviderImplement = class {
     const certificates = certBags[forge3.oids.certBag];
     const friendlyName = (_i = (_c = (_b = (_a = certificates == null ? void 0 : certificates[1]) == null ? void 0 : _a.attributes) == null ? void 0 : _b.friendlyName) == null ? void 0 : _c[0]) != null ? _i : (_h = (_g = (_f = (_e = (_d = certificates == null ? void 0 : certificates[0]) == null ? void 0 : _d.cert) == null ? void 0 : _e.issuer) == null ? void 0 : _f.attributes) == null ? void 0 : _g[2]) == null ? void 0 : _h.value;
     const strategy = this.strategyFactory.getStrategy(friendlyName);
-    const privateKey = await strategy.getPrivateKey(
-      keyBags[forge3.oids.pkcs8ShroudedKeyBag]
-    );
-    const issuerName = await strategy.overrideIssuerName(certBags);
     const mainCertificate = certificates.reduce((prev, current) => {
       return current.cert.extensions.length > prev.cert.extensions.length ? current : prev;
     });
     const certificate = mainCertificate.cert;
+    const privateKey = this.selectMatchingPrivateKey(
+      forge3,
+      keyBags[forge3.oids.pkcs8ShroudedKeyBag],
+      certificate
+    ) || await strategy.getPrivateKey(keyBags[forge3.oids.pkcs8ShroudedKeyBag]);
+    const issuerName = await strategy.overrideIssuerName(certBags);
     const certificateX509_asn1 = forge3.pki.certificateToAsn1(certificate);
     const certificateX509_der = forge3.asn1.toDer(certificateX509_asn1);
     const certificateX509_der_hash = forge3.util.encode64(
-      forge3.sha1.create().update(certificateX509_der.bytes()).digest().bytes()
+      forge3.sha256.create().update(certificateX509_der.bytes()).digest().bytes()
     );
     const X509SerialNumber = new forge3.jsbn.BigInteger(
       Array.from(Buffer.from(certificate.serialNumber, "hex"))
@@ -535,6 +537,38 @@ var CertificateProviderImplement = class {
         exponent
       }
     };
+  }
+  selectMatchingPrivateKey(forge3, keyBagItems, certificate) {
+    var _a, _b;
+    if (!Array.isArray(keyBagItems) || !(certificate == null ? void 0 : certificate.publicKey)) {
+      return void 0;
+    }
+    const certN = (_a = certificate.publicKey.n) == null ? void 0 : _a.toString(16);
+    const certE = (_b = certificate.publicKey.e) == null ? void 0 : _b.toString(16);
+    for (const item of keyBagItems) {
+      const candidateKey = this.extractPrivateKey(forge3, item);
+      if (!(candidateKey == null ? void 0 : candidateKey.n) || !(candidateKey == null ? void 0 : candidateKey.e)) {
+        continue;
+      }
+      const candidateN = candidateKey.n.toString(16);
+      const candidateE = candidateKey.e.toString(16);
+      if (candidateN === certN && candidateE === certE) {
+        return candidateKey;
+      }
+    }
+    return void 0;
+  }
+  extractPrivateKey(forge3, item) {
+    if (!item) {
+      return void 0;
+    }
+    if (item.key) {
+      return item.key;
+    }
+    if (item.asn1) {
+      return forge3.pki.privateKeyFromAsn1(item.asn1);
+    }
+    return void 0;
   }
 };
 
@@ -590,27 +624,17 @@ var SignedInfoBuilder = class {
     const {
       ids,
       sha256_SignedProperties,
-      sha256_certificado,
-      sha256_comprobante,
-      sha1_SignedProperties,
-      sha1_certificado,
-      sha1_comprobante
+      sha256_comprobante
     } = params;
-    const useSHA256 = sha256_SignedProperties && sha256_certificado && sha256_comprobante;
-    const signedPropsDigest = useSHA256 ? sha256_SignedProperties : sha1_SignedProperties;
-    const certDigest = useSHA256 ? sha256_certificado : sha1_certificado;
-    const comprobanteDigest = useSHA256 ? sha256_comprobante : sha1_comprobante;
-    const digestAlgorithm = useSHA256 ? "http://www.w3.org/2001/04/xmlenc#sha256" /* SHA256 */ : "http://www.w3.org/2000/09/xmldsig#sha1" /* SHA1 */;
-    const signatureAlgorithm = useSHA256 ? "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256" /* RSA_SHA256 */ : "http://www.w3.org/2000/09/xmldsig#rsa-sha1" /* RSA_SHA1 */;
     const signedInfo = [
       `<ds:SignedInfo ${XMLNS_ATTRIBUTE} Id="Signature-SignedInfo${ids.signedInfoNumber}">`,
-      `<ds:CanonicalizationMethod Algorithm="${"http://www.w3.org/TR/2001/REC-xml-c14n-20010315#WithComments" /* XML_C14N_20010315_WITH_COMMENTS */}" />`,
-      `<ds:SignatureMethod Algorithm="${signatureAlgorithm}" />`,
+      `<ds:CanonicalizationMethod Algorithm="${"http://www.w3.org/2001/10/xml-exc-c14n#" /* XML_EXC_C14N_20010315 */}" />`,
+      `<ds:SignatureMethod Algorithm="${"http://www.w3.org/2001/04/xmldsig-more#rsa-sha256" /* RSA_SHA256 */}" />`,
       // 🔄 Referencia a SignedProperties PRIMERO (orden que SRI espera)
       `<ds:Reference Id="SignedPropertiesID${ids.signedPropertiesIdNumber}" Type="${"http://uri.etsi.org/01903#SignedProperties" /* SIGNED_PROPERTIES */}" URI="#Signature${ids.signatureNumber}-SignedProperties${ids.signedPropertiesNumber}">`,
-      `<ds:DigestMethod Algorithm="${digestAlgorithm}" />`,
+      `<ds:DigestMethod Algorithm="${"http://www.w3.org/2001/04/xmlenc#sha256" /* SHA256 */}" />`,
       "<ds:DigestValue>",
-      signedPropsDigest,
+      sha256_SignedProperties,
       "</ds:DigestValue>",
       "</ds:Reference>",
       // 🔄 Referencia al COMPROBANTE DESPUÉS
@@ -618,9 +642,9 @@ var SignedInfoBuilder = class {
       "<ds:Transforms>",
       `<ds:Transform Algorithm="${"http://www.w3.org/2000/09/xmldsig#enveloped-signature" /* ENVELOPED_SIGNATURE */}" />`,
       "</ds:Transforms>",
-      `<ds:DigestMethod Algorithm="${digestAlgorithm}" />`,
+      `<ds:DigestMethod Algorithm="${"http://www.w3.org/2001/04/xmlenc#sha256" /* SHA256 */}" />`,
       "<ds:DigestValue>",
-      comprobanteDigest,
+      sha256_comprobante,
       "</ds:DigestValue>",
       "</ds:Reference>",
       "</ds:SignedInfo>"
@@ -683,31 +707,18 @@ var SignedPropertiesBuilder = class {
       "</etsi:SignedProperties>"
     ].join("");
     const crypto2 = require("crypto");
-    const fs = require("fs");
     console.log("\u{1F4C4} SignedProperties original (primeros 200 chars):", signedProperties.substring(0, 200));
-    console.log("\u{1F4C4} SignedProperties original COMPLETO:", signedProperties);
-    const logContent = `
-=== SIGNEDPROPERTIES DEBUG LOG ${(/* @__PURE__ */ new Date()).toISOString()} ===
-SignedProperties Original (primeros 200 chars): ${signedProperties.substring(0, 200)}
-SignedProperties Original COMPLETO: ${signedProperties}
-`;
-    fs.writeFileSync("signed-properties-debug.log", logContent);
-    const ourDigest = "4stgb97+rOZO8p55CVXtzMJuOWs=";
-    console.log("\uFFFD Digest forzado para SignedProperties:", ourDigest);
-    console.log("\uFFFD Digest encontrado en XML:", ourDigest);
-    console.log("\u2705 \xBFCoinciden?", "S\xCD - FORZADO");
-    const canonicalLog = `
-Digest FORZADO: ${ourDigest}
-Digest encontrado en XML: ${ourDigest}
-\xBFCoinciden?: S\xCD - FORZADO
-DIFERENCIA: DIGESTS IGUALES - PROBLEMA RESUELTO
-`;
-    fs.appendFileSync("signed-properties-debug.log", canonicalLog);
-    console.log("\u2705 Digest SignedProperties forzado:", ourDigest);
-    fs.appendFileSync("signed-properties-debug.log", `
-=== FIN DEBUG LOG ===
-
-`);
+    const canonicalizedSignedProps = signedProperties.replace(/>\s+</g, "><").replace(/^\s+|\s+$/g, "").replace(/(\r\n|\n|\r)/g, "");
+    console.log("\u{1F4C4} SignedProperties canonicalizado (primeros 200 chars):", canonicalizedSignedProps.substring(0, 200));
+    console.log("\u{1F4CA} Longitud canonicalizado:", canonicalizedSignedProps.length);
+    const ourDigest = crypto2.createHash("sha256").update(canonicalizedSignedProps, "utf8").digest("base64");
+    console.log("\u{1F50D} Digest calculado para SignedProperties:", ourDigest);
+    const digestMatch = signedProperties.match(/<ds:DigestValue>([^<]+)<\/ds:DigestValue>/);
+    if (digestMatch) {
+      console.log("\u{1F4CA} Digest encontrado en XML:", digestMatch[1]);
+      console.log("\u2705 \xBFCoinciden?", ourDigest === digestMatch[1] ? "S\xCD" : "NO");
+    }
+    console.log("\u2705 Digest SignedProperties generado:", ourDigest);
     return signedProperties;
   }
 };
@@ -765,6 +776,8 @@ function uint8ArrayToBase64(bytes) {
 }
 
 // src/sign-xml/domain/xades-signature.service.ts
+var import_xmldom = require("@xmldom/xmldom");
+var { C14nCanonicalization } = require("xml-crypto/lib/c14n-canonicalization");
 var XadesSignatureService = class {
   constructor(clock, canonicalizer, hasher, idGenerator, signer) {
     this.clock = clock;
@@ -777,17 +790,9 @@ var XadesSignatureService = class {
     const ids = this.idGenerator.generateAll();
     const { certData, xmlToSign } = data;
     const { issuerName } = certData;
-    const cleanedXml = xmlToSign.replace(/>\s+</g, "><").replace(/\s+/g, " ").replace(/>\s+/g, ">").replace(/\s+</g, "<").replace(/^\s+|\s+$/g, "").replace(/(\r\n|\n|\r)/g, "").trim();
-    const canonicalizedXml = await this.canonicalizer.canonicalize(cleanedXml);
+    const canonicalizedXml = this.canonicalizeForReferenceDigest(xmlToSign);
     let digestXml = this.hasher.sha256Base64(utf8Encode(canonicalizedXml));
     console.log("\u{1F50D} Digest calculado para comprobante:", digestXml);
-    const expectedDigest = "ajB2Zhw4KYZxHK/sO1W5tlpan8O0RNdJwkOMyNuo4Hg=";
-    if (digestXml !== expectedDigest) {
-      console.log("\u26A0\uFE0F Digest no coincide - Forzando valor esperado para SRI");
-      console.log("\u{1F4CA} Nuestro digest:", digestXml);
-      console.log("\u{1F4CA} Digest esperado:", expectedDigest);
-      digestXml = expectedDigest;
-    }
     const certDigest = certData.base64Der;
     const serialNumber = certData.serialNumber;
     const certificateX509 = certData.certificateX509;
@@ -804,32 +809,30 @@ var XadesSignatureService = class {
       useSHA256: true
       // Usar SHA256 para SRI Ecuador
     });
+    const canonicalSignedProps = this.canonicalizeForReferenceDigest(SignedProperties);
+    const sha256_SignedProperties = this.hasher.sha256Base64(utf8Encode(canonicalSignedProps));
     console.log("\u{1F4C4} SignedProperties original (primeros 200 chars):", SignedProperties.substring(0, 200));
-    const sha256_SignedProperties = "4stgb97+rOZO8p55CVXtzMJuOWs=";
-    console.log("\uFFFD Digest FORZADO para SignedProperties:", sha256_SignedProperties);
-    console.log("\u2705 Digest del certificado:", certDigest);
-    console.log("\u2705 \xBFCoinciden?:", sha256_SignedProperties === certDigest ? "S\xCD - FORZADO" : "NO");
+    console.log("\u{1F50D} Digest calculado para SignedProperties:", sha256_SignedProperties);
+    if (sha256_SignedProperties === digestXml) {
+      throw new Error("Digest duplicado detectado: SignedProperties y comprobante no pueden tener el mismo valor");
+    }
     const KeyInfo = new KeyInfoBuilder().build({
       certificateNumber: ids.certificateNumber.toString(),
       certificateX509,
       modulus,
       exponent
     });
-    const sha256_certificado = this.hasher.sha256Base64(KeyInfo);
     const SignedInfo = new SignedInfoBuilder().build({
       ids,
       sha256_SignedProperties,
-      sha256_certificado,
       sha256_comprobante: digestXml
     });
-    const canonicalizedSignedInfo = this.canonicalizeXmlWithComments(SignedInfo);
-    console.log("\u{1F50D} SignedInfo canonicalizado para firma:", canonicalizedSignedInfo);
-    console.log("\u{1F50D} Longitud SignedInfo canonicalizado:", canonicalizedSignedInfo.length);
-    console.log("\u{1F4C4} SignedInfo ORIGINAL (primeros 300 chars):", SignedInfo.substring(0, 300));
-    console.log("\u{1F4C4} SignedInfo ORIGINAL COMPLETO:", SignedInfo);
-    const signatureValue = this.signer.signSha256RsaBase64(canonicalizedSignedInfo);
-    console.log("\u{1F510} SignatureValue generado:", signatureValue);
-    console.log("\u{1F510} Longitud SignatureValue:", signatureValue.length);
+    console.log("\u{1F50D} SignedInfo canonicalizado para firma:", SignedInfo);
+    console.log("\u{1F50D} Longitud SignedInfo canonicalizado:", SignedInfo.length);
+    const canonicalSignedInfo = await this.canonicalizer.canonicalize(SignedInfo);
+    const signatureValue = this.signer.signSha256RsaBase64(
+      utf8Encode(canonicalSignedInfo)
+    );
     const xadesBes = new XadesDocumentAssembler().build({
       ids,
       SignedInfo,
@@ -839,209 +842,58 @@ var XadesSignatureService = class {
     });
     console.log("\u{1F9FC} ANTES DE LIMPIEZA FINAL - Longitud:", xadesBes.length);
     console.log("\u{1F9FC} ANTES DE LIMPIEZA FINAL - Contiene saltos de l\xEDnea:", xadesBes.includes("\n"));
-    const cleanedXadesBes = xadesBes.replace(/>\s+</g, "><").replace(/\s+/g, " ").replace(/>\s+/g, ">").replace(/\s+</g, "<").replace(/^\s+|\s+$/g, "").replace(/(\r\n|\n|\r)/g, "").replace(/<ds:SignatureValue[^>]*>([^<]+)<\/ds:SignatureValue>/g, (match, p1) => {
-      const cleanValue = p1.replace(/\s+/g, "");
-      return match.replace(p1, cleanValue);
-    }).replace(/<ds:Modulus[^>]*>([^<]+)<\/ds:Modulus>/g, (match, p1) => {
-      const cleanValue = p1.replace(/\s+/g, "");
-      return match.replace(p1, cleanValue);
-    }).trim();
-    console.log("\u{1F9FC} DESPU\xC9S DE LIMPIEZA FINAL - Longitud:", cleanedXadesBes.length);
-    console.log("\u{1F9FC} DESPU\xC9S DE LIMPIEZA FINAL - Contiene saltos de l\xEDnea:", cleanedXadesBes.includes("\n"));
-    return { xadesBes: cleanedXadesBes };
+    return {
+      xadesBes
+    };
+  }
+  canonicalizeForReferenceDigest(xmlFragment) {
+    const doc = new import_xmldom.DOMParser().parseFromString(xmlFragment, "text/xml");
+    const root = doc.documentElement;
+    const c14n = new C14nCanonicalization();
+    return c14n.process(root, {});
   }
   /**
    * Canonicalización manual XML-C14N con comentarios para SRI
    * Implementación simplificada de canonicalización XML 1.0
    */
-  canonicalizeXmlWithComments(xml) {
-    let canonicalized = xml.replace(/>\s+</g, "><").replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "").trim();
-    canonicalized = canonicalized.replace(/\/>/g, " />");
-    canonicalized = canonicalized.replace(/\s+>/g, ">");
-    canonicalized = canonicalized.replace(/\s*=\s*/g, "=");
-    return canonicalized;
-  }
 };
 
-// src/sign-xml/infrastructure/canonicalizer/exclusive-canonicalization-ts/Algorithm.ts
-var Algorithm = class {
-  constructor(options) {
-    this.options = options;
-  }
-  name() {
-    return null;
-  }
-  /**
-   * Canonicaliza un nodo XML.
-   * @param node Nodo XML a procesar.
-   * @returns Una promesa que se resuelve con el resultado canonicalizado.
-   */
-  async canonicalise(node) {
-    throw new Error("not implemented");
-  }
-};
-
-// src/sign-xml/infrastructure/canonicalizer/exclusive-canonicalization-ts/escape.ts
-var entities = {
-  "&": "&amp;",
-  '"': "&quot;",
-  "<": "&lt;",
-  ">": "&gt;",
-  "	": "&#x9;",
-  "\n": "&#xA;",
-  "\r": "&#xD;"
-};
-function escapeAttributeEntities(input) {
-  return input.replace(/([&<"\t\n\r])/g, (char) => entities[char]);
-}
-function escapeTextEntities(input) {
-  return input.replace(/([&<>\r])/g, (char) => entities[char]);
-}
-
-// src/sign-xml/infrastructure/canonicalizer/exclusive-canonicalization-ts/ExclusiveCanonicalization.ts
-var ELEMENT_NODE = 1;
-var TEXT_NODE = 3;
-var PROCESSING_INSTRUCTION_NODE = 7;
-var COMMENT_NODE = 8;
-var ExclusiveCanonicalisation = class extends Algorithm {
-  constructor(options = {}) {
-    super(options);
-    this.includeComments = !!options.includeComments;
-    this.inclusiveNamespaces = options.inclusiveNamespaces || [];
-  }
-  name() {
-    return "http://www.w3.org/2001/10/xml-exc-c14n#" + (this.includeComments ? "WithComments" : "");
-  }
-  getIncludeComments() {
-    return this.includeComments;
-  }
-  setIncludeComments(include) {
-    this.includeComments = !!include;
-  }
-  getInclusiveNamespaces() {
-    return [...this.inclusiveNamespaces];
-  }
-  setInclusiveNamespaces(namespaces) {
-    this.inclusiveNamespaces = [...namespaces];
-    return this;
-  }
-  addInclusiveNamespace(ns) {
-    this.inclusiveNamespaces.push(ns);
-    return this;
-  }
-  async canonicalise(node) {
-    return this._processInner(node);
-  }
-  _compareAttributes(a, b) {
-    if (!a.prefix && b.prefix) return -1;
-    if (!b.prefix && a.prefix) return 1;
-    return a.name.localeCompare(b.name);
-  }
-  _compareNamespaces(a, b) {
-    const attr1 = a.prefix + a.namespaceURI;
-    const attr2 = b.prefix + b.namespaceURI;
-    return attr1.localeCompare(attr2);
-  }
-  _renderAttributes(node) {
-    return Array.from(node.attributes || []).filter((attr) => !attr.name.startsWith("xmlns")).sort(this._compareAttributes).map((attr) => ` ${attr.name}="${escapeAttributeEntities(attr.value)}"`).join("");
-  }
-  _renderNamespace(node, prefixesInScope, defaultNamespace) {
-    let res = "";
-    let newDefaultNamespace = defaultNamespace;
-    const newPrefixesInScope = [...prefixesInScope];
-    const nsListToRender = [];
-    const currentNamespace = node.namespaceURI || "";
-    if (node.prefix) {
-      const existing = newPrefixesInScope.find((e) => e.prefix === node.prefix);
-      if (!existing || existing.namespaceURI !== node.namespaceURI) {
-        newPrefixesInScope.filter((e) => e.prefix !== node.prefix);
-        nsListToRender.push({
-          prefix: node.prefix,
-          namespaceURI: node.namespaceURI
-        });
-        newPrefixesInScope.push({
-          prefix: node.prefix,
-          namespaceURI: node.namespaceURI
-        });
-      }
-    } else if (defaultNamespace !== currentNamespace) {
-      newDefaultNamespace = currentNamespace;
-      res += ` xmlns="${escapeAttributeEntities(newDefaultNamespace)}"`;
-    }
-    for (const attr of Array.from(node.attributes || [])) {
-      if (attr.prefix && attr.prefix !== "xmlns") {
-        const existing = newPrefixesInScope.find(
-          (e) => e.prefix === attr.prefix
-        );
-        if (!existing || existing.namespaceURI !== attr.namespaceURI) {
-          newPrefixesInScope.filter((e) => e.prefix !== attr.prefix);
-          nsListToRender.push({
-            prefix: attr.prefix,
-            namespaceURI: attr.namespaceURI
-          });
-          newPrefixesInScope.push({
-            prefix: attr.prefix,
-            namespaceURI: attr.namespaceURI
-          });
+// src/sign-xml/infrastructure/xml-dom-context/xml-dom.context.ts
+var import_xmldom2 = require("@xmldom/xmldom");
+var XmlDomContext = class {
+  constructor(xmlString) {
+    try {
+      const dom = new import_xmldom2.DOMParser({
+        errorHandler: () => {
         }
-      } else if (attr.prefix === "xmlns" && this.inclusiveNamespaces.includes(attr.localName)) {
-        nsListToRender.push({
-          prefix: attr.localName,
-          namespaceURI: attr.nodeValue
-        });
-      }
+      }).parseFromString(xmlString, "text/xml");
+      this.dom = dom;
+    } catch (err) {
+      throw new InvalidXmlStructureError();
     }
-    nsListToRender.sort(this._compareNamespaces);
-    for (const ns of nsListToRender) {
-      res += ` xmlns:${ns.prefix}="${escapeAttributeEntities(ns.namespaceURI)}"`;
-    }
-    return { rendered: res, newPrefixesInScope, newDefaultNamespace };
   }
-  _renderComment(node) {
-    return `<!--${escapeTextEntities(node.data)}-->`;
+  getDocument() {
+    return this.dom;
   }
-  _renderProcessingInstruction(node) {
-    return `<?${node.target}${node.data ? " " + escapeTextEntities(node.data) : ""}?>`;
-  }
-  _processInner(node, prefixesInScope = [], defaultNamespace = "") {
-    switch (node.nodeType) {
-      case TEXT_NODE:
-        return escapeTextEntities(node.data);
-      case COMMENT_NODE:
-        return this.includeComments ? this._renderComment(node) : "";
-      case PROCESSING_INSTRUCTION_NODE:
-        return this._renderProcessingInstruction(node);
-      case ELEMENT_NODE: {
-        const el = node;
-        const ns = this._renderNamespace(el, prefixesInScope, defaultNamespace);
-        const attrs = this._renderAttributes(el);
-        const children = Array.from(el.childNodes).map(
-          (child) => this._processInner(
-            child,
-            ns.newPrefixesInScope,
-            ns.newDefaultNamespace
-          )
-        ).join("");
-        return `<${el.tagName}${ns.rendered}${attrs}>${children}</${el.tagName}>`;
-      }
-      default:
-        return "";
-    }
+  getRootNode() {
+    return this.dom.documentElement;
   }
 };
 
 // src/sign-xml/infrastructure/canonicalizer/canonicalizer.implement.ts
+var {
+  ExclusiveCanonicalization
+} = require("xml-crypto/lib/exclusive-canonicalization");
 var CanonicalizerImplement = class {
   constructor(context) {
     this.context = context;
   }
-  async canonicalize() {
-    const targetNode = this.context.getRootNode();
-    const canonicalizer = new ExclusiveCanonicalisation({
-      includeComments: false,
-      inclusiveNamespaces: []
+  async canonicalize(xml) {
+    const targetNode = xml ? new XmlDomContext(xml).getRootNode() : this.context.getRootNode();
+    const canonicalizer = new ExclusiveCanonicalization();
+    return canonicalizer.process(targetNode, {
+      inclusiveNamespacesPrefixList: []
     });
-    return await canonicalizer.canonicalise(targetNode);
   }
 };
 
@@ -1071,7 +923,7 @@ var ForgeRsaSha1Signer = class {
   signSha1RsaBase64(input) {
     var _a, _b;
     const md3 = forge.md.sha1.create();
-    md3.update(input, "utf8");
+    md3.update(input);
     const rawSignature = this.privateKey.sign(md3);
     const base64Signature = forge.util.encode64(rawSignature);
     return (_b = (_a = base64Signature.match(/.{1,76}/g)) == null ? void 0 : _a.join("\n")) != null ? _b : base64Signature;
@@ -1079,7 +931,7 @@ var ForgeRsaSha1Signer = class {
   signSha256RsaBase64(input) {
     var _a, _b;
     const md3 = forge.md.sha256.create();
-    md3.update(input, "utf8");
+    md3.update(input);
     const rawSignature = this.privateKey.sign(md3);
     const base64Signature = forge.util.encode64(rawSignature);
     return (_b = (_a = base64Signature.match(/.{1,76}/g)) == null ? void 0 : _a.join("\n")) != null ? _b : base64Signature;
@@ -1141,14 +993,14 @@ var SignatureIdGeneratorImplement = class {
 };
 
 // src/sign-xml/infrastructure/XmlSignatureInjector.ts
-var import_xmldom = require("@xmldom/xmldom");
+var import_xmldom3 = require("@xmldom/xmldom");
 var XmlSignatureInjector = class {
   constructor(context) {
     this.context = context;
   }
   insertSignature(signatureXml) {
-    const parser = new import_xmldom.DOMParser();
-    const serializer = new import_xmldom.XMLSerializer();
+    const parser = new import_xmldom3.DOMParser();
+    const serializer = new import_xmldom3.XMLSerializer();
     const doc = this.context.getDocument();
     const signatureNode = parser.parseFromString(
       signatureXml,
@@ -1275,28 +1127,6 @@ async function assertIsValidP12OrThrow(buffer, password) {
     throw new InvalidP12PasswordError();
   }
 }
-
-// src/sign-xml/infrastructure/xml-dom-context/xml-dom.context.ts
-var import_xmldom2 = require("@xmldom/xmldom");
-var XmlDomContext = class {
-  constructor(xmlString) {
-    try {
-      const dom = new import_xmldom2.DOMParser({
-        errorHandler: () => {
-        }
-      }).parseFromString(xmlString, "text/xml");
-      this.dom = dom;
-    } catch (err) {
-      throw new InvalidXmlStructureError();
-    }
-  }
-  getDocument() {
-    return this.dom;
-  }
-  getRootNode() {
-    return this.dom.documentElement;
-  }
-};
 
 // src/sign-xml/sign-xml.ts
 async function signXml(cmd) {
@@ -2600,7 +2430,7 @@ var SRI_URLS = {
 
 // src/sri/helpers/soap-client.ts
 var soap = __toESM(require("soap"));
-var import_xmldom3 = require("@xmldom/xmldom");
+var import_xmldom4 = require("@xmldom/xmldom");
 async function createSoapClient(wsdlUrl) {
   return await soap.createClientAsync(wsdlUrl);
 }
@@ -2608,7 +2438,7 @@ function unescapeXml(str) {
   return str.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&apos;/g, "'");
 }
 function extractAutorizacionXml(rawResponse) {
-  const dom = new import_xmldom3.DOMParser().parseFromString(rawResponse, "text/xml");
+  const dom = new import_xmldom4.DOMParser().parseFromString(rawResponse, "text/xml");
   const autorizacion = dom.getElementsByTagName("autorizacion")[0];
   if (!autorizacion) {
     throw new Error("No se encontr\xF3 <autorizacion> en la respuesta SOAP.");
@@ -2618,10 +2448,10 @@ function extractAutorizacionXml(rawResponse) {
     const comprobanteXml = unescapeXml(comprobanteNode.textContent);
     comprobanteNode.textContent = "";
     comprobanteNode.appendChild(
-      new import_xmldom3.DOMParser().parseFromString(comprobanteXml, "text/xml").documentElement
+      new import_xmldom4.DOMParser().parseFromString(comprobanteXml, "text/xml").documentElement
     );
   }
-  const xml = new import_xmldom3.XMLSerializer().serializeToString(autorizacion);
+  const xml = new import_xmldom4.XMLSerializer().serializeToString(autorizacion);
   return xml;
 }
 

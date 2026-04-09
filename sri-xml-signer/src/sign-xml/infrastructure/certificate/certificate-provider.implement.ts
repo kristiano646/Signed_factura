@@ -31,21 +31,25 @@ export class CertificateProviderImplement implements CertificateProviderPort {
       certificates?.[0]?.cert?.issuer?.attributes?.[2]?.value;
 
     const strategy = this.strategyFactory.getStrategy(friendlyName);
-    const privateKey = await strategy.getPrivateKey(
-      keyBags[forge.oids.pkcs8ShroudedKeyBag]
-    );
-    const issuerName = await strategy.overrideIssuerName(certBags);
-
     const mainCertificate = certificates.reduce((prev, current) => {
       return current.cert.extensions.length > prev.cert.extensions.length
         ? current
         : prev;
     });
     const certificate = mainCertificate.cert;
+    const privateKey =
+      this.selectMatchingPrivateKey(
+        forge,
+        keyBags[forge.oids.pkcs8ShroudedKeyBag],
+        certificate
+      ) ||
+      (await strategy.getPrivateKey(keyBags[forge.oids.pkcs8ShroudedKeyBag]));
+    const issuerName = await strategy.overrideIssuerName(certBags);
+
     const certificateX509_asn1 = forge.pki.certificateToAsn1(certificate);
     const certificateX509_der = forge.asn1.toDer(certificateX509_asn1);
     const certificateX509_der_hash = forge.util.encode64(
-      forge.sha1.create().update(certificateX509_der.bytes()).digest().bytes()
+      forge.sha256.create().update(certificateX509_der.bytes()).digest().bytes()
     );
 
     const X509SerialNumber = new forge.jsbn.BigInteger(
@@ -70,5 +74,46 @@ export class CertificateProviderImplement implements CertificateProviderPort {
         exponent,
       },
     };
+  }
+
+  private selectMatchingPrivateKey(
+    forge: any,
+    keyBagItems: any[],
+    certificate: any
+  ): any | undefined {
+    if (!Array.isArray(keyBagItems) || !certificate?.publicKey) {
+      return undefined;
+    }
+
+    const certN = certificate.publicKey.n?.toString(16);
+    const certE = certificate.publicKey.e?.toString(16);
+
+    for (const item of keyBagItems) {
+      const candidateKey = this.extractPrivateKey(forge, item);
+      if (!candidateKey?.n || !candidateKey?.e) {
+        continue;
+      }
+
+      const candidateN = candidateKey.n.toString(16);
+      const candidateE = candidateKey.e.toString(16);
+      if (candidateN === certN && candidateE === certE) {
+        return candidateKey;
+      }
+    }
+
+    return undefined;
+  }
+
+  private extractPrivateKey(forge: any, item: any): any | undefined {
+    if (!item) {
+      return undefined;
+    }
+    if (item.key) {
+      return item.key;
+    }
+    if (item.asn1) {
+      return forge.pki.privateKeyFromAsn1(item.asn1);
+    }
+    return undefined;
   }
 }

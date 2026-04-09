@@ -6,7 +6,7 @@ export class ForgeRsaSha1Signer implements SignerPort {
 
   signSha1RsaBase64(input: string): string {
     const md = forge.md.sha1.create();
-    md.update(input, "utf8");
+    md.update(input);
 
     const rawSignature = this.privateKey.sign(md);
     const base64Signature = forge.util.encode64(rawSignature);
@@ -17,7 +17,7 @@ export class ForgeRsaSha1Signer implements SignerPort {
 
   signSha256RsaBase64(input: string): string {
     const md = forge.md.sha256.create();
-    md.update(input, "utf8");
+    md.update(input);
 
     const rawSignature = this.privateKey.sign(md);
     const base64Signature = forge.util.encode64(rawSignature);
