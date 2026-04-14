@@ -1,13 +1,11 @@
 import { signXml } from "./../sign-xml";
 import { SignXmlRequest } from "../domain/interfaces";
-import * as validation from "../infrastructure/validations/p12.validation";
 import * as build from "../infrastructure/composition/buildSignXmlUseCase";
 import { CertificateProviderImplement } from "../infrastructure/certificate/certificate-provider.implement";
 import { XmlDomContext } from "../infrastructure/xml-dom-context/xml-dom.context";
 import { ErrorHandler } from "../infrastructure/handlers";
 
 
-jest.mock("../infrastructure/validations/p12.validation");
 jest.mock("../infrastructure/certificate/certificate-provider.implement");
 jest.mock("../infrastructure/xml-dom-context/xml-dom.context");
 jest.mock("../infrastructure/composition/buildSignXmlUseCase");
@@ -30,9 +28,6 @@ describe("signXml", () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
-
-    // Mock validación del P12
-    (validation.assertIsValidP12OrThrow as jest.Mock).mockResolvedValue(undefined);
 
     // Mock proveedor de certificado
     (CertificateProviderImplement as jest.Mock).mockImplementation(() => ({
@@ -60,10 +55,6 @@ describe("signXml", () => {
 
     const result = await signXml(input);
 
-    expect(validation.assertIsValidP12OrThrow).toHaveBeenCalledWith(
-      input.p12Buffer,
-      input.password
-    );
     expect(result).toBe("<FacturaFirmada/>");
   });
 

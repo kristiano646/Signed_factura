@@ -20,6 +20,8 @@ import { DOMParser } from "@xmldom/xmldom";
 
 const { C14nCanonicalization } = require("xml-crypto/lib/c14n-canonicalization");
 
+const SIGNER_DEBUG = process.env.SIGNER_DEBUG === "true";
+
 export class XadesSignatureService {
   constructor(
     private readonly clock: ClockPort,
@@ -42,7 +44,9 @@ export class XadesSignatureService {
     let digestXml = this.hasher.sha256Base64(utf8Encode(canonicalizedXml));
 
     // 🔍 DEBUG: Mostrar digest calculado
-    console.log("🔍 Digest calculado para comprobante:", digestXml);
+    if (SIGNER_DEBUG) {
+      console.log("🔍 Digest calculado para comprobante:", digestXml);
+    }
     
     const certDigest = certData.base64Der;
 
@@ -63,10 +67,14 @@ export class XadesSignatureService {
     });
 const canonicalSignedProps = this.canonicalizeForReferenceDigest(SignedProperties);
 const sha256_SignedProperties = this.hasher.sha256Base64(utf8Encode(canonicalSignedProps));
-    console.log("📄 SignedProperties original (primeros 200 chars):", SignedProperties.substring(0, 200));
+    if (SIGNER_DEBUG) {
+      console.log("📄 SignedProperties original (primeros 200 chars):", SignedProperties.substring(0, 200));
+    }
     
     // Canonicalizar SignedProperties como lo hace el SRI
-   console.log("🔍 Digest calculado para SignedProperties:", sha256_SignedProperties);
+   if (SIGNER_DEBUG) {
+     console.log("🔍 Digest calculado para SignedProperties:", sha256_SignedProperties);
+   }
     if (sha256_SignedProperties === digestXml) {
       throw new Error("Digest duplicado detectado: SignedProperties y comprobante no pueden tener el mismo valor");
     }
@@ -86,8 +94,10 @@ const sha256_SignedProperties = this.hasher.sha256Base64(utf8Encode(canonicalSig
     // 🚨 IMPORTANTE: Canonicalizar el SignedInfo antes de firmar (XML-C14N con comentarios)
     // NOTA: Implementación manual de XML-C14N con comentarios para SRI
   
-    console.log("🔍 SignedInfo canonicalizado para firma:", SignedInfo);
-    console.log("🔍 Longitud SignedInfo canonicalizado:", SignedInfo.length);
+    if (SIGNER_DEBUG) {
+      console.log("🔍 SignedInfo canonicalizado para firma:", SignedInfo);
+      console.log("🔍 Longitud SignedInfo canonicalizado:", SignedInfo.length);
+    }
     
    const canonicalSignedInfo = await this.canonicalizer.canonicalize(SignedInfo);
 
@@ -103,8 +113,10 @@ const signatureValue = this.signer.signSha256RsaBase64(
     });
 
     // LIMPIEZA FINAL: Eliminar saltos de línea del XML firmado
-    console.log("🧼 ANTES DE LIMPIEZA FINAL - Longitud:", xadesBes.length);
-    console.log("🧼 ANTES DE LIMPIEZA FINAL - Contiene saltos de línea:", xadesBes.includes('\n'));
+    if (SIGNER_DEBUG) {
+      console.log("🧼 ANTES DE LIMPIEZA FINAL - Longitud:", xadesBes.length);
+      console.log("🧼 ANTES DE LIMPIEZA FINAL - Contiene saltos de línea:", xadesBes.includes('\n'));
+    }
     return {
       xadesBes
     };

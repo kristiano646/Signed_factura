@@ -490,10 +490,8 @@ var CertificateProviderImplement = class {
   async getCertificateData() {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i;
     const forge3 = await getForge();
-    const uint8Array = new Uint8Array(this.p12Buffer);
-    const p12Base64 = forge3.util.binary.base64.encode(uint8Array);
-    const p12Decoded = forge3.util.decode64(p12Base64);
-    const p12Asn1 = forge3.asn1.fromDer(p12Decoded);
+    const binaryP12 = Buffer.from(this.p12Buffer).toString("binary");
+    const p12Asn1 = forge3.asn1.fromDer(binaryP12);
     const p12 = forge3.pkcs12.pkcs12FromAsn1(p12Asn1, this.password);
     const keyBags = p12.getBags({
       bagType: forge3.pki.oids.pkcs8ShroudedKeyBag
@@ -778,6 +776,7 @@ function uint8ArrayToBase64(bytes) {
 // src/sign-xml/domain/xades-signature.service.ts
 var import_xmldom = require("@xmldom/xmldom");
 var { C14nCanonicalization } = require("xml-crypto/lib/c14n-canonicalization");
+var SIGNER_DEBUG = process.env.SIGNER_DEBUG === "true";
 var XadesSignatureService = class {
   constructor(clock, canonicalizer, hasher, idGenerator, signer) {
     this.clock = clock;
@@ -792,7 +791,9 @@ var XadesSignatureService = class {
     const { issuerName } = certData;
     const canonicalizedXml = this.canonicalizeForReferenceDigest(xmlToSign);
     let digestXml = this.hasher.sha256Base64(utf8Encode(canonicalizedXml));
-    console.log("\u{1F50D} Digest calculado para comprobante:", digestXml);
+    if (SIGNER_DEBUG) {
+      console.log("\u{1F50D} Digest calculado para comprobante:", digestXml);
+    }
     const certDigest = certData.base64Der;
     const serialNumber = certData.serialNumber;
     const certificateX509 = certData.certificateX509;
@@ -811,8 +812,12 @@ var XadesSignatureService = class {
     });
     const canonicalSignedProps = this.canonicalizeForReferenceDigest(SignedProperties);
     const sha256_SignedProperties = this.hasher.sha256Base64(utf8Encode(canonicalSignedProps));
-    console.log("\u{1F4C4} SignedProperties original (primeros 200 chars):", SignedProperties.substring(0, 200));
-    console.log("\u{1F50D} Digest calculado para SignedProperties:", sha256_SignedProperties);
+    if (SIGNER_DEBUG) {
+      console.log("\u{1F4C4} SignedProperties original (primeros 200 chars):", SignedProperties.substring(0, 200));
+    }
+    if (SIGNER_DEBUG) {
+      console.log("\u{1F50D} Digest calculado para SignedProperties:", sha256_SignedProperties);
+    }
     if (sha256_SignedProperties === digestXml) {
       throw new Error("Digest duplicado detectado: SignedProperties y comprobante no pueden tener el mismo valor");
     }
@@ -827,8 +832,10 @@ var XadesSignatureService = class {
       sha256_SignedProperties,
       sha256_comprobante: digestXml
     });
-    console.log("\u{1F50D} SignedInfo canonicalizado para firma:", SignedInfo);
-    console.log("\u{1F50D} Longitud SignedInfo canonicalizado:", SignedInfo.length);
+    if (SIGNER_DEBUG) {
+      console.log("\u{1F50D} SignedInfo canonicalizado para firma:", SignedInfo);
+      console.log("\u{1F50D} Longitud SignedInfo canonicalizado:", SignedInfo.length);
+    }
     const canonicalSignedInfo = await this.canonicalizer.canonicalize(SignedInfo);
     const signatureValue = this.signer.signSha256RsaBase64(
       utf8Encode(canonicalSignedInfo)
@@ -840,8 +847,10 @@ var XadesSignatureService = class {
       KeyInfo,
       SignedProperties
     });
-    console.log("\u{1F9FC} ANTES DE LIMPIEZA FINAL - Longitud:", xadesBes.length);
-    console.log("\u{1F9FC} ANTES DE LIMPIEZA FINAL - Contiene saltos de l\xEDnea:", xadesBes.includes("\n"));
+    if (SIGNER_DEBUG) {
+      console.log("\u{1F9FC} ANTES DE LIMPIEZA FINAL - Longitud:", xadesBes.length);
+      console.log("\u{1F9FC} ANTES DE LIMPIEZA FINAL - Contiene saltos de l\xEDnea:", xadesBes.includes("\n"));
+    }
     return {
       xadesBes
     };
@@ -1111,27 +1120,9 @@ var ErrorHandler = class {
   }
 };
 
-// src/sign-xml/infrastructure/validations/p12.validation.ts
-async function assertIsValidP12OrThrow(buffer, password) {
-  const forge3 = await getForge();
-  const binaryStr = Array.from(buffer).map((b) => String.fromCharCode(b)).join("");
-  let asn1;
-  try {
-    asn1 = forge3.asn1.fromDer(forge3.util.createBuffer(binaryStr, "binary"));
-  } catch {
-    throw new InvalidP12StructureError();
-  }
-  try {
-    forge3.pkcs12.pkcs12FromAsn1(asn1, password);
-  } catch {
-    throw new InvalidP12PasswordError();
-  }
-}
-
 // src/sign-xml/sign-xml.ts
 async function signXml(cmd) {
   try {
-    await assertIsValidP12OrThrow(cmd.p12Buffer, cmd.password);
     const certProvider = new CertificateProviderImplement(
       cmd.p12Buffer,
       cmd.password,

@@ -5,12 +5,10 @@ import { CertificateProviderImplement } from "./infrastructure/certificate/certi
 import { buildSignXmlUseCase } from "./infrastructure/composition/buildSignXmlUseCase";
 
 import { ErrorHandler } from "./infrastructure/handlers";
-import { assertIsValidP12OrThrow } from "./infrastructure/validations/p12.validation";
 import { XmlDomContext } from "./infrastructure/xml-dom-context/xml-dom.context";
 
 export async function signXml(cmd: SignXmlRequest): Promise<string> {
   try {
-    await assertIsValidP12OrThrow(cmd.p12Buffer, cmd.password);
     const certProvider = new CertificateProviderImplement(
       cmd.p12Buffer,
       cmd.password,

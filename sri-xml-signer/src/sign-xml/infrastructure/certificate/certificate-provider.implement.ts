@@ -14,10 +14,8 @@ export class CertificateProviderImplement implements CertificateProviderPort {
 
   async getCertificateData(): Promise<ParsedP12Certificate> {
     const forge = await getForge();
-    const uint8Array = new Uint8Array(this.p12Buffer);
-    const p12Base64 = forge.util.binary.base64.encode(uint8Array);
-    const p12Decoded = forge.util.decode64(p12Base64);
-    const p12Asn1 = forge.asn1.fromDer(p12Decoded);
+    const binaryP12 = Buffer.from(this.p12Buffer).toString("binary");
+    const p12Asn1 = forge.asn1.fromDer(binaryP12);
     const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, this.password);
 
     const keyBags = p12.getBags({
